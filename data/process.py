@@ -4,7 +4,6 @@ import joblib
 import numpy as np
 import qmt
 import tree
-
 from x_xy.subpkgs import exp
 from x_xy.subpkgs import omc
 
@@ -22,7 +21,7 @@ def _alignment_timings(exp_id: str) -> tuple[float, float]:
     timings = exp.load_timings(exp_id)
     timings_list = list(timings.keys())
     motion = _alignment_timings_motion[exp_id]
-    next_motion = timings_list[timings_list.index(motion)]
+    next_motion = timings_list[timings_list.index(motion) + 1]
     return timings[motion], timings[next_motion]
 
 
@@ -149,7 +148,11 @@ def to_joblib(exp_id: str):
 
 
 def main():
+    _already_processed = ["S_04", "S_06"]
     for exp_id in _alignment_timings_motion:
+        if exp_id in _already_processed:
+            continue
+
         to_joblib(exp_id)
 
 
