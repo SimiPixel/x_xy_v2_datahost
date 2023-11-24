@@ -1,4 +1,9 @@
+""" # noqa: E501
+Re-create the synced and aligned experimental data of the experiments done in Berlin in June 23.
+Go into the data folder and execute this file.
+"""
 import json
+import os
 
 import joblib
 import numpy as np
@@ -11,9 +16,22 @@ output_file_ending = ""
 
 _marker_closest_to_rigid_imu = {"seg1": 4, "seg5": 4, "seg2": 3, "seg3": 3, "seg4": 2}
 
+# if experiment is not present, then alignment will be skipped
+# this motion phase should not contain too crazy motion; it will just
+# make the acceleration estimate "hide" gravity
 _alignment_timings_motion = {
     "S_04": "slow",
     "S_06": "slow1",
+    "S_07": "slow_fast_mix",
+    "S_08": "slow1",
+    "S_09": "slow_global",
+    "S_10": "pickandplace",
+    "S_12": "slow1",
+    "S_13": "slow_fast_mix",
+    "S_14": "slow",
+    "S_15": "slow_global",
+    "S_16": "gait_slow",
+    "T_01": ("slow", "shaking"),
 }
 
 
@@ -21,7 +39,10 @@ def _alignment_timings(exp_id: str) -> tuple[float, float]:
     timings = exp.load_timings(exp_id)
     timings_list = list(timings.keys())
     motion = _alignment_timings_motion[exp_id]
-    next_motion = timings_list[timings_list.index(motion) + 1]
+    if isinstance(motion, str):
+        next_motion = timings_list[timings_list.index(motion) + 1]
+    else:
+        motion, next_motion = motion
     return timings[motion], timings[next_motion]
 
 
@@ -98,7 +119,9 @@ def to_joblib(exp_id: str):
     hz_omc = exp.load_hz_omc(exp_id)
 
     output_path = f"{exp_id}{output_file_ending}.joblib"
-    _exp_folder = "/Users/simon/Documents/berlin_02_06_23/berlin_02_06_23/experiments"
+    _exp_folder = (
+        "/Users/simon/Documents/data/berlin_02_06_23/berlin_02_06_23/experiments"
+    )
     path_optitrack_file = f"{_exp_folder}/{exp_id}/optitrack/{exp_id}_{hz_omc}Hz.csv"
     path_imu_folder = f"{_exp_folder}/{exp_id}/imu"
     setup_file = (
@@ -117,21 +140,23 @@ def to_joblib(exp_id: str):
         segment_names_setup_file=_segment_names_in_experiment(exp_id),
     )
 
-    qEOpt2EImu_euler_deg, qImu2Seg_euler_deg = _get_alignment(
-        data, exp_id, hz_omc, hz_imu
-    )
+    do_alignment = exp_id in _alignment_timings_motion
+    if do_alignment:
+        qEOpt2EImu_euler_deg, qImu2Seg_euler_deg = _get_alignment(
+            data, exp_id, hz_omc, hz_imu
+        )
 
-    # aligned
-    data, _ = omc.read_omc(
-        path_marker_imu_setup_file=setup_file,
-        path_optitrack_file=path_optitrack_file,
-        path_imu_folder=path_imu_folder,
-        imu_sync_offset=imu_sync_offset,
-        qEOpt2EImu_euler_deg=qEOpt2EImu_euler_deg,
-        qImu2Seg_euler_deg=qImu2Seg_euler_deg,
-        imu_names_setup_file=_imu_names_setup_file(exp_id),
-        segment_names_setup_file=_segment_names_in_experiment(exp_id),
-    )
+        # aligned
+        data, _ = omc.read_omc(
+            path_marker_imu_setup_file=setup_file,
+            path_optitrack_file=path_optitrack_file,
+            path_imu_folder=path_imu_folder,
+            imu_sync_offset=imu_sync_offset,
+            qEOpt2EImu_euler_deg=qEOpt2EImu_euler_deg,
+            qImu2Seg_euler_deg=qImu2Seg_euler_deg,
+            imu_names_setup_file=_imu_names_setup_file(exp_id),
+            segment_names_setup_file=_segment_names_in_experiment(exp_id),
+        )
 
     hz_in = omc.hz_helper(
         list(data.keys()),
@@ -148,9 +173,24 @@ def to_joblib(exp_id: str):
 
 
 def main():
-    _already_processed = ["S_04", "S_06"]
-    for exp_id in _alignment_timings_motion:
-        if exp_id in _already_processed:
+    _already_processed = os.listdir(".")
+    exp_ids = [
+        "S_04",
+        "S_06",
+        "S_07",
+        "S_08",
+        "S_09",
+        "S_10",
+        "S_12",
+        "S_13",
+        "S_14",
+        "S_15",
+        "S_16",
+        # "D_01",
+        "T_01",
+    ]
+    for exp_id in exp_ids:
+        if (exp_id + ".joblib") in _already_processed:
             continue
 
         to_joblib(exp_id)
